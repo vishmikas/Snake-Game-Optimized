@@ -1,18 +1,45 @@
-// ─── Pure game logic — zero network, zero React deps ──────────────────────────
-// Ported 1-to-1 from GameService.java. All functions are pure (state in → state out).
+// Pure Snake game logic — frontend-only, no backend requests.
 
 export const COLS = 24;
 export const ROWS = 24;
 
-const POINTS_PER_LEVEL = 5;
-const BASE_SPEED = 150;
-const SPEED_REDUCTION = 10;
-const MIN_SPEED = 60;
-
 export const DIRECTIONS = { UP: "UP", DOWN: "DOWN", LEFT: "LEFT", RIGHT: "RIGHT" };
 export const STATUS = { RUNNING: "RUNNING", GAME_OVER: "GAME_OVER", LEVEL_UP: "LEVEL_UP" };
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+export const DIFFICULTIES = {
+  easy: {
+    label: "Easy",
+    description: "Relaxed pace for practice",
+    baseSpeed: 180,
+    speedReduction: 7,
+    minSpeed: 85,
+    pointsPerLevel: 6,
+  },
+  normal: {
+    label: "Normal",
+    description: "Balanced classic gameplay",
+    baseSpeed: 140,
+    speedReduction: 9,
+    minSpeed: 65,
+    pointsPerLevel: 5,
+  },
+  hard: {
+    label: "Hard",
+    description: "Fast reactions required",
+    baseSpeed: 105,
+    speedReduction: 8,
+    minSpeed: 50,
+    pointsPerLevel: 5,
+  },
+  insane: {
+    label: "Insane",
+    description: "Only for brave players",
+    baseSpeed: 78,
+    speedReduction: 6,
+    minSpeed: 42,
+    pointsPerLevel: 4,
+  },
+};
 
 function spawnApple(snake) {
   let pos;
@@ -31,20 +58,20 @@ function resolveDirection(current, requested) {
 
 function moveHead([x, y], dir) {
   switch (dir) {
-    case "UP":    return [x, y - 1];
-    case "DOWN":  return [x, y + 1];
-    case "LEFT":  return [x - 1, y];
+    case "UP": return [x, y - 1];
+    case "DOWN": return [x, y + 1];
+    case "LEFT": return [x - 1, y];
     case "RIGHT": return [x + 1, y];
+    default: return [x, y];
   }
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────────
-
-/** Creates a fresh game state. Equivalent to GameService.newGame(). */
-export function newGame(skin = "classic") {
+export function newGame({ skin = "classic", difficulty = "normal" } = {}) {
+  const settings = DIFFICULTIES[difficulty] ?? DIFFICULTIES.normal;
   const startX = Math.floor(COLS / 2);
   const startY = Math.floor(ROWS / 2);
   const snake = Array.from({ length: 4 }, (_, i) => [startX - i, startY]);
+
   return {
     snake,
     apple: spawnApple(snake),
@@ -52,55 +79,48 @@ export function newGame(skin = "classic") {
     status: STATUS.RUNNING,
     score: 0,
     level: 1,
-    speed: BASE_SPEED,
+    speed: settings.baseSpeed,
     skin,
+    difficulty,
+    lastAteApple: false,
   };
 }
 
-/**
- * Advances the game by one tick. Returns a NEW state object (immutable update).
- * Equivalent to GameService.tick().
- */
 export function tick(state, requestedDir) {
-  if (state.status === STATUS.GAME_OVER) return state;
+  if (!state || state.status === STATUS.GAME_OVER) return state;
 
+  const settings = DIFFICULTIES[state.difficulty] ?? DIFFICULTIES.normal;
   const dir = resolveDirection(state.direction, requestedDir);
   const newHead = moveHead(state.snake[0], dir);
 
-  // Wall collision
   if (newHead[0] < 0 || newHead[0] >= COLS || newHead[1] < 0 || newHead[1] >= ROWS) {
-    return { ...state, direction: dir, status: STATUS.GAME_OVER };
+    return { ...state, direction: dir, status: STATUS.GAME_OVER, lastAteApple: false };
   }
 
-  // Self collision (skip last segment — it will move away)
   const body = state.snake.slice(0, state.snake.length - 1);
   if (body.some(([x, y]) => x === newHead[0] && y === newHead[1])) {
-    return { ...state, direction: dir, status: STATUS.GAME_OVER };
+    return { ...state, direction: dir, status: STATUS.GAME_OVER, lastAteApple: false };
   }
 
-  const ateApple =
-    newHead[0] === state.apple[0] && newHead[1] === state.apple[1];
-
-  // Build new snake
+  const ateApple = newHead[0] === state.apple[0] && newHead[1] === state.apple[1];
   const newSnake = [newHead, ...state.snake];
   if (!ateApple) newSnake.pop();
 
   if (!ateApple) {
-    // Normal move — reset LEVEL_UP status back to RUNNING if needed
     return {
       ...state,
       snake: newSnake,
       direction: dir,
       status: state.status === STATUS.LEVEL_UP ? STATUS.RUNNING : state.status,
+      lastAteApple: false,
     };
   }
 
-  // Ate apple
   const newScore = state.score + 1;
-  const newLevel = Math.floor(newScore / POINTS_PER_LEVEL) + 1;
+  const newLevel = Math.floor(newScore / settings.pointsPerLevel) + 1;
   const leveledUp = newLevel !== state.level;
   const newSpeed = leveledUp
-    ? Math.max(MIN_SPEED, BASE_SPEED - (newLevel - 1) * SPEED_REDUCTION)
+    ? Math.max(settings.minSpeed, settings.baseSpeed - (newLevel - 1) * settings.speedReduction)
     : state.speed;
 
   return {
@@ -112,5 +132,6 @@ export function tick(state, requestedDir) {
     level: newLevel,
     speed: newSpeed,
     status: leveledUp ? STATUS.LEVEL_UP : STATUS.RUNNING,
+    lastAteApple: true,
   };
 }

@@ -1,0 +1,18 @@
+{
+  "name": "Snake Game Optimized",
+  "short_name": "Snake",
+  "description": "A fast, responsive Snake game with difficulty levels, themes, high scores, and mobile controls.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06101f",
+  "theme_color": "#22c55e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/public/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

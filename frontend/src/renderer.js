@@ -1,46 +1,77 @@
-// ─── Renderer — dual-canvas, minimal redraws ──────────────────────────────────
-// bgCanvas: grid + background, drawn ONCE and never again (unless skin changes).
-// fgCanvas: snake + apple, cleared and redrawn every tick.
-
 import { COLS, ROWS } from "./gameLogic.js";
 
 export const CELL = 24;
-export const CANVAS_PX = COLS * CELL; // 576px
+export const CANVAS_PX = COLS * CELL;
 
 export const SKINS = {
-  classic: { head: "#22c55e", body: "#16a34a", apple: "#ef4444", bg: "#0a0a0a", grid: "#141414" },
-  neon:    { head: "#00fff0", body: "#0891b2", apple: "#f0abfc", bg: "#0d0d1a", grid: "#131827" },
-  fire:    { head: "#fbbf24", body: "#f97316", apple: "#a855f7", bg: "#1c0a00", grid: "#1e1005" },
+  classic: {
+    label: "Classic",
+    head: "#22c55e",
+    body: "#16a34a",
+    apple: "#ef4444",
+    bg: "#06110c",
+    grid: "#12301e",
+  },
+  neon: {
+    label: "Neon",
+    head: "#00fff0",
+    body: "#0891b2",
+    apple: "#f0abfc",
+    bg: "#08081c",
+    grid: "#121a34",
+  },
+  fire: {
+    label: "Fire",
+    head: "#fbbf24",
+    body: "#f97316",
+    apple: "#a855f7",
+    bg: "#1c0a00",
+    grid: "#2b1507",
+  },
+  ocean: {
+    label: "Ocean",
+    head: "#38bdf8",
+    body: "#2563eb",
+    apple: "#facc15",
+    bg: "#031525",
+    grid: "#0c2a42",
+  },
+  candy: {
+    label: "Candy",
+    head: "#fb7185",
+    body: "#f472b6",
+    apple: "#34d399",
+    bg: "#1a1022",
+    grid: "#2d1d3d",
+  },
 };
 
-/** Draw background + grid onto the bg canvas. Call once per skin change. */
 export function drawBackground(bgCanvas, skinKey) {
-  const colors = SKINS[skinKey];
+  const colors = SKINS[skinKey] ?? SKINS.classic;
   const ctx = bgCanvas.getContext("2d");
   const W = CANVAS_PX;
   const H = CANVAS_PX;
 
-  ctx.fillStyle = colors.bg;
+  const gradient = ctx.createLinearGradient(0, 0, W, H);
+  gradient.addColorStop(0, colors.bg);
+  gradient.addColorStop(1, "#020617");
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, W, H);
 
   ctx.strokeStyle = colors.grid;
   ctx.lineWidth = 0.5;
-
-  // Draw all vertical lines in a single path
   ctx.beginPath();
   for (let c = 0; c <= COLS; c++) {
     ctx.moveTo(c * CELL, 0);
     ctx.lineTo(c * CELL, H);
   }
-  // Draw all horizontal lines in the same path
   for (let r = 0; r <= ROWS; r++) {
     ctx.moveTo(0, r * CELL);
     ctx.lineTo(W, r * CELL);
   }
-  ctx.stroke(); // Single stroke call — was 98 individual calls before
+  ctx.stroke();
 }
 
-/** Draw snake + apple onto the fg canvas. Called every tick. */
 export function drawGame(fgCanvas, gameState) {
   if (!gameState || !fgCanvas) return;
 
@@ -50,39 +81,46 @@ export function drawGame(fgCanvas, gameState) {
 
   ctx.clearRect(0, 0, CANVAS_PX, CANVAS_PX);
 
-  // ── Apple (glow only on apple — 1 shadow pass total) ──────────────────────
+  const pulse = 1 + Math.sin(Date.now() / 140) * 0.08;
   ctx.shadowColor = colors.apple;
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = 16;
   ctx.fillStyle = colors.apple;
   ctx.beginPath();
   ctx.arc(
     apple[0] * CELL + CELL / 2,
     apple[1] * CELL + CELL / 2,
-    CELL / 2 - 2,
+    (CELL / 2 - 3) * pulse,
     0,
     Math.PI * 2
   );
   ctx.fill();
-  ctx.shadowBlur = 0; // Reset ONCE after apple
+  ctx.shadowBlur = 0;
 
-  // ── Snake body (no shadow — was a per-segment shadow before) ─────────────
   ctx.fillStyle = colors.body;
   for (let i = snake.length - 1; i >= 1; i--) {
     const [sx, sy] = snake[i];
+    const alpha = Math.max(0.48, 1 - i / (snake.length + 8));
+    ctx.globalAlpha = alpha;
     ctx.beginPath();
-    ctx.roundRect(sx * CELL + 2, sy * CELL + 2, CELL - 4, CELL - 4, 3);
+    ctx.roundRect(sx * CELL + 2, sy * CELL + 2, CELL - 4, CELL - 4, 5);
     ctx.fill();
   }
+  ctx.globalAlpha = 1;
 
-  // ── Head (single glow pass for the head only) ─────────────────────────────
   if (snake.length > 0) {
     const [hx, hy] = snake[0];
     ctx.shadowColor = colors.head;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 20;
     ctx.fillStyle = colors.head;
     ctx.beginPath();
-    ctx.roundRect(hx * CELL + 1, hy * CELL + 1, CELL - 2, CELL - 2, 5);
+    ctx.roundRect(hx * CELL + 1, hy * CELL + 1, CELL - 2, CELL - 2, 7);
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
+    ctx.beginPath();
+    ctx.arc(hx * CELL + CELL * 0.68, hy * CELL + CELL * 0.35, 2.2, 0, Math.PI * 2);
+    ctx.arc(hx * CELL + CELL * 0.68, hy * CELL + CELL * 0.65, 2.2, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
