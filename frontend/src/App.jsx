@@ -45,7 +45,7 @@ function saveJson(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // localStorage can be unavailable in some private browsing modes.
+    // localStorage can be unavailable in private browsing modes.
   }
 }
 
@@ -59,7 +59,7 @@ function SoundEngine() {
     return ctxRef.current;
   };
 
-  const beep = (frequency, duration, type = "sine", volume = 0.045) => {
+  const beep = (frequency, duration, type = "sine", volume = 0.04) => {
     const ctx = getCtx();
     if (!ctx) return;
     const oscillator = ctx.createOscillator();
@@ -75,13 +75,13 @@ function SoundEngine() {
   };
 
   return {
-    eat: () => beep(720, 0.07, "triangle", 0.05),
+    eat: () => beep(720, 0.07, "triangle", 0.045),
     level: () => {
-      beep(520, 0.08, "sine", 0.04);
-      setTimeout(() => beep(780, 0.09, "sine", 0.04), 80);
+      beep(520, 0.08, "sine", 0.035);
+      setTimeout(() => beep(780, 0.09, "sine", 0.035), 80);
     },
-    over: () => beep(130, 0.22, "sawtooth", 0.035),
-    click: () => beep(360, 0.04, "triangle", 0.03),
+    over: () => beep(130, 0.22, "sawtooth", 0.03),
+    click: () => beep(360, 0.04, "triangle", 0.025),
   };
 }
 
@@ -112,10 +112,13 @@ export default function App() {
   const [muted, setMuted] = useState(Boolean(savedSettings.muted));
   const [playerName, setPlayerName] = useState(savedSettings.playerName || "Player");
   const [countdown, setCountdown] = useState(null);
+  const [showPanel, setShowPanel] = useState(false);
 
   const colors = SKINS[skin] ?? SKINS.classic;
   const isBoardVisible = ["countdown", "playing", "paused", "gameover"].includes(screen);
-  const isNewRecord = Boolean(displayState?.score > 0 && displayState.score >= highScore);
+  const score = displayState?.score ?? 0;
+  const level = displayState?.level ?? 1;
+  const isNewRecord = Boolean(score > 0 && score >= highScore);
 
   useEffect(() => { screenRef.current = screen; }, [screen]);
   useEffect(() => { skinRef.current = skin; }, [skin]);
@@ -189,7 +192,7 @@ export default function App() {
 
     if (next.lastAteApple) {
       setScorePop(true);
-      setTimeout(() => setScorePop(false), 420);
+      setTimeout(() => setScorePop(false), 360);
       playSound(next.status === STATUS.LEVEL_UP ? "level" : "eat");
       vibrate(next.status === STATUS.LEVEL_UP ? [40, 30, 40] : 18);
     }
@@ -205,7 +208,7 @@ export default function App() {
 
     if (next.status === STATUS.LEVEL_UP) {
       setLevelFlash(true);
-      setTimeout(() => setLevelFlash(false), 800);
+      setTimeout(() => setLevelFlash(false), 650);
     }
 
     if (next.speed !== lastSpeedRef.current) {
@@ -235,6 +238,7 @@ export default function App() {
   const startCountdown = useCallback(() => {
     playSound("click");
     clearTimers();
+    setShowPanel(false);
     const preview = newGame({ skin: skinRef.current, difficulty: difficultyRef.current });
     gameStateRef.current = preview;
     setDisplayState(preview);
@@ -248,14 +252,14 @@ export default function App() {
       index += 1;
       if (index < steps.length) {
         setCountdown(steps[index]);
-        countdownRef.current = setTimeout(nextStep, 650);
+        countdownRef.current = setTimeout(nextStep, 580);
       } else {
         setCountdown(null);
         beginGame();
       }
     };
 
-    countdownRef.current = setTimeout(nextStep, 650);
+    countdownRef.current = setTimeout(nextStep, 580);
   }, [beginGame, clearTimers, playSound]);
 
   const pauseGame = useCallback(() => {
@@ -337,85 +341,104 @@ export default function App() {
 
   return (
     <div className="app" style={{ "--head": colors.head, "--apple": colors.apple }}>
-      <div className="glow-bg" />
+      <main className="shell">
+        <header className="topbar">
+          <div className="brand">
+            <span className="snake-mark">🐍</span>
+            <div>
+              <h1>Snake</h1>
+              <p>Classic arcade game</p>
+            </div>
+          </div>
 
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Optimized Edition</p>
-          <h1 className="logo">🐍 SNAKE</h1>
-        </div>
+          <div className="scorebar" aria-label="Game stats">
+            <div><span>Score</span><strong>{score}</strong></div>
+            <div><span>Best</span><strong>{highScore}</strong></div>
+            <div><span>Level</span><strong>{level}</strong></div>
+          </div>
+        </header>
 
-        <div className="hud" aria-label="Game stats">
-          <span className="hud-item">SCORE <strong>{displayState?.score ?? 0}</strong></span>
-          <span className="hud-item">BEST <strong>{highScore}</strong></span>
-          <span className={`hud-item level-badge ${levelFlash ? "flash" : ""}`}>LVL <strong>{displayState?.level ?? 1}</strong></span>
-        </div>
-      </header>
-
-      <main className="layout">
         {screen === "menu" && (
-          <section className="menu-card" aria-label="Start menu">
-            <div className="hero-copy">
-              <p className="tagline">Fast, responsive, browser-powered Snake.</p>
-              <h2>Eat, grow, survive, and beat your best score.</h2>
-              <p className="subtext">Choose a difficulty and skin, then use arrow keys, WASD, swipe gestures, or the mobile controls.</p>
+          <section className="start-card" aria-label="Start game">
+            <h2>Ready?</h2>
+            <p>Eat the food. Avoid the wall. Beat your best score.</p>
+
+            <div className="quick-settings">
+              <label>
+                Player
+                <input
+                  maxLength={16}
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Player"
+                />
+              </label>
+
+              <label>
+                Difficulty
+                <select value={difficulty} onChange={(e) => chooseDifficulty(e.target.value)}>
+                  {Object.entries(DIFFICULTIES).map(([key, item]) => (
+                    <option key={key} value={key}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
-            <label className="name-field">
-              Player name
-              <input
-                maxLength={16}
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Player"
-              />
-            </label>
+            <button className="primary-btn" onClick={startCountdown}>Start Game</button>
 
-            <div className="option-block">
-              <div className="section-title">
-                <span>Difficulty</span>
-                <small>{DIFFICULTIES[difficulty].description}</small>
-              </div>
-              <div className="difficulty-grid">
-                {Object.entries(DIFFICULTIES).map(([key, item]) => (
-                  <button key={key} className={`choice-btn ${difficulty === key ? "active" : ""}`} onClick={() => chooseDifficulty(key)}>
-                    <strong>{item.label}</strong>
-                    <span>{item.baseSpeed}ms start</span>
-                  </button>
-                ))}
-              </div>
+            <div className="small-actions">
+              <button onClick={() => setShowPanel((value) => !value)}>{showPanel ? "Hide" : "Show"} options</button>
+              <button onClick={() => setMuted((value) => !value)}>{muted ? "Sound Off" : "Sound On"}</button>
             </div>
 
-            <div className="option-block">
-              <div className="section-title">
-                <span>Theme</span>
-                <small>Unlock a fresh feeling any time</small>
-              </div>
-              <div className="skins">
-                {Object.entries(SKINS).map(([key, item]) => (
-                  <button key={key} className={`skin-btn ${skin === key ? "active" : ""}`} style={{ "--c": item.head }} onClick={() => chooseSkin(key)}>
-                    <span className="skin-dot" style={{ background: item.head }} />
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {showPanel && (
+              <div className="simple-panel">
+                <div>
+                  <h3>Theme</h3>
+                  <div className="theme-row">
+                    {Object.entries(SKINS).map(([key, item]) => (
+                      <button
+                        key={key}
+                        className={`theme-dot ${skin === key ? "active" : ""}`}
+                        style={{ background: item.head }}
+                        onClick={() => chooseSkin(key)}
+                        title={item.label}
+                        aria-label={item.label}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-            <div className="menu-actions">
-              <button className="play-btn" onClick={startCountdown}>START GAME</button>
-              <button className="icon-btn" onClick={() => setMuted((value) => !value)}>{muted ? "🔇" : "🔊"} Sound</button>
-            </div>
+                <div>
+                  <h3>Top Scores</h3>
+                  {leaderboard.length === 0 ? (
+                    <p className="muted-text">No scores yet.</p>
+                  ) : (
+                    <ol className="compact-leaderboard">
+                      {leaderboard.slice(0, 3).map((entry, index) => (
+                        <li key={`${entry.date}-${entry.score}-${index}`}>
+                          <span>{index + 1}. {entry.name}</span>
+                          <strong>{entry.score}</strong>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+
+                <p className="help-text">Controls: Arrow keys / WASD / swipe / mobile buttons. Space or P pauses.</p>
+              </div>
+            )}
           </section>
         )}
 
         {isBoardVisible && (
-          <section className={`game-zone ${screen === "gameover" ? "shake" : ""}`}>
-            <div className="board-toolbar">
-              <span>{DIFFICULTIES[displayState?.difficulty || difficulty].label} Mode</span>
-              <div className="toolbar-actions">
-                {screen === "playing" && <button className="mini-btn" onClick={pauseGame}>Pause</button>}
-                {screen === "paused" && <button className="mini-btn" onClick={resumeGame}>Resume</button>}
-                <button className="mini-btn" onClick={goMenu}>Menu</button>
+          <section className={`game-card ${screen === "gameover" ? "shake" : ""}`}>
+            <div className="game-toolbar">
+              <span>{DIFFICULTIES[displayState?.difficulty || difficulty].label}</span>
+              <div>
+                {screen === "playing" && <button onClick={pauseGame}>Pause</button>}
+                {screen === "paused" && <button onClick={resumeGame}>Resume</button>}
+                <button onClick={goMenu}>Menu</button>
               </div>
             </div>
 
@@ -424,30 +447,32 @@ export default function App() {
               <canvas ref={fgCanvasRef} width={CANVAS_PX} height={CANVAS_PX} className={`game-canvas fg-layer ${screen !== "playing" ? "dimmed" : ""}`} />
 
               {scorePop && <div className="score-pop">+1</div>}
-              {levelFlash && <div className="level-flash">LEVEL {displayState?.level}!</div>}
-
+              {levelFlash && <div className="level-flash">Level {level}</div>}
               {screen === "countdown" && <div className="center-overlay countdown">{countdown}</div>}
 
               {screen === "paused" && (
                 <div className="center-panel">
                   <h2>Paused</h2>
-                  <p>Press Space or tap resume to continue.</p>
-                  <button className="play-btn small" onClick={resumeGame}>RESUME</button>
+                  <button className="primary-btn small" onClick={resumeGame}>Resume</button>
                 </div>
               )}
 
               {screen === "gameover" && (
-                <div className="center-panel gameover-panel">
-                  <p className="result-kicker">{isNewRecord ? "New High Score!" : "Game Over"}</p>
-                  <h2>{displayState?.score ?? 0} pts</h2>
-                  <p>Level {displayState?.level ?? 1} · {DIFFICULTIES[displayState?.difficulty || difficulty].label}</p>
-                  <div className="go-buttons">
-                    <button className="play-btn small" onClick={startCountdown}>PLAY AGAIN</button>
-                    <button className="play-btn small outline" onClick={goMenu}>CHANGE SETUP</button>
+                <div className="center-panel">
+                  <p className="result-kicker">{isNewRecord ? "New Best!" : "Game Over"}</p>
+                  <h2>{score}</h2>
+                  <p>Level {level}</p>
+                  <div className="end-actions">
+                    <button className="primary-btn small" onClick={startCountdown}>Again</button>
+                    <button className="secondary-btn" onClick={goMenu}>Menu</button>
                   </div>
-                  <p className="hint">Press R to restart</p>
                 </div>
               )}
+            </div>
+
+            <div className="below-game">
+              <p>Use arrow keys or swipe. Press Space to pause.</p>
+              <button onClick={() => setMuted((value) => !value)}>{muted ? "🔇" : "🔊"}</button>
             </div>
 
             {screen === "playing" && (
@@ -463,38 +488,6 @@ export default function App() {
             )}
           </section>
         )}
-
-        <aside className="side-panel">
-          <section className="info-card">
-            <div className="section-title"><span>How to Play</span></div>
-            <ul className="tips">
-              <li>Eat food to grow and increase your score.</li>
-              <li>Avoid walls and your own snake body.</li>
-              <li>Use Arrow keys, WASD, swipe, or mobile buttons.</li>
-              <li>Press Space or P to pause and resume.</li>
-            </ul>
-          </section>
-
-          <section className="info-card">
-            <div className="section-title"><span>Top Scores</span><small>Saved on this device</small></div>
-            {leaderboard.length === 0 ? (
-              <p className="empty">No scores yet. Start a game and set the first record.</p>
-            ) : (
-              <ol className="leaderboard">
-                {leaderboard.map((entry, index) => (
-                  <li key={`${entry.date}-${entry.score}-${index}`}>
-                    <span className="rank">#{index + 1}</span>
-                    <div>
-                      <strong>{entry.name}</strong>
-                      <small>{entry.difficulty} · {entry.skin} · {entry.date}</small>
-                    </div>
-                    <b>{entry.score}</b>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        </aside>
       </main>
     </div>
   );
