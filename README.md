@@ -50,17 +50,8 @@ frontend/
 cd frontend
 npm install
 npm run build
-# push to GitHub → connect to Vercel → done
 ```
 
 No environment variables needed. No backend. No cold-start delays.
 
-## Run locally
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173
